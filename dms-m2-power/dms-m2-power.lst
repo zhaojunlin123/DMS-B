@@ -1,0 +1,1216 @@
+---- G:\倍益康\MCU选型\中微\dms-m2-power\src\main.c ----------------------------------------------------------------------
+1:                #include "bk_drv_comm.h"
+2:                #include "bk_app.h"
+3:                
+4:                void main()
+5:                {
+6:                	bk_app_init();
+  02EA    227D    CALL	0x27D
+7:                	while(1)
+8:                	{
+9:                		bk_drv_comm_watchdog_feed();
+  02EB    22ED    CALL	0x2ED
+  02EC    2AEB    JP	0x2EB
+10:               	}
+11:               }
+---- G:\倍益康\MCU选型\中微\dms-m2-power\src\bk_drv_comm.c ----------------------------------------------------------------------
+1:                #include "bk_drv_comm.h"
+2:                
+3:                static void bk_drv_comm_timer2_set();
+4:                
+5:                //驱动初始化
+6:                void bk_drv_comm_init(void)
+  0219    0000    NOP
+  021A    0064    CLRWDT
+7:                {
+8:                	//时钟配置
+9:                	asm("nop");
+10:               	asm("clrwdt");			//上电复位WDT溢出周期144ms
+11:               	INTCON = 0;				//禁止中断
+  021B    018B    CLR	0xB
+12:               	OSCCON = 0x60;			//配置晶振频率为1M
+  021C    3060    LDIA	0x60
+  021D    1683    SETB	0x3,5
+  021E    008F    LD	0xF,A
+13:               	
+14:               	//IO配置 
+15:               	//LED IO
+16:               	BSP_TRIS_LED &= ~(1<<BSP_PIN_LED_1);		//输出
+  021F    1006    CLRB	0x6,0
+17:               	BSP_TRIS_LED &= ~(1<<BSP_PIN_LED_2);
+  0220    1106    CLRB	0x6,2
+18:               	BSP_TRIS_LED &= ~(1<<BSP_PIN_LED_3);	
+  0221    1086    CLRB	0x6,1
+19:               	//充电检测
+20:               	BSP_TRIS_CHARGE |= 1<<BSP_PIN_CHARGE;		//输入
+  0222    1586    SETB	0x6,3
+21:               	BSP_WPDB_CHARGE |= 1<<BSP_PIN_CHARGE;		//设置弱下拉
+  0223    1587    SETB	0x7,3
+22:               	//AD输入
+23:               	BSP_ANSEL_AD    |= 1<<BSP_ANSEL_AD;			//设置为模拟
+  0224    3001    LDIA	0x1
+  0225    1283    CLRB	0x3,5
+  0226    00A3    LD	0x23,A
+  0227    1683    SETB	0x3,5
+  0228    0A13    INCA	0x13
+  0229    1283    CLRB	0x3,5
+  022A    2A2D    JP	0x22D
+  022B    1003    CLRB	0x3,0
+  022C    0DA3    RLCR	0x23
+  022D    3EFF    ADDIA	0xFF
+  022E    1D03    SNZB	0x3,2
+  022F    2A2B    JP	0x22B
+  0230    0823    LD	A,0x23
+  0231    1683    SETB	0x3,5
+  0232    0493    ORR	0x13
+24:               	
+25:               	//设置TIMER2定时器
+26:               	bk_drv_comm_timer2_set();
+  0233    2A9C    JP	0x29C
+27:               }
+28:               
+29:               //定时器设置  timer2时钟为系统时钟4分频 
+30:               static void bk_drv_comm_timer2_set()
+31:               {			
+32:               	T2CON = 0B00111100;			//开启Timer2,设置TMR2的预分频比为1:16 后分频比为1：1	
+  029C    303C    LDIA	0x3C
+  029D    1283    CLRB	0x3,5
+  029E    0092    LD	0x12,A
+33:               	                               
+34:               	PR2 = 62;					//设定Timer初始值，定时周期是62*4*16/1M=3.96ms
+  029F    303E    LDIA	0x3E
+  02A0    1683    SETB	0x3,5
+  02A1    0092    LD	0x12,A
+35:               	TMR2IF = 0;
+  02A2    1283    CLRB	0x3,5
+  02A3    108C    CLRB	0xC,1
+36:               	TMR2IE = 1;					//使能Timer2溢出中断
+  02A4    1683    SETB	0x3,5
+  02A5    148C    SETB	0xC,1
+37:               	INTCON = 0xC0;				//开启总中断
+  02A6    30C0    LDIA	0xC0
+  02A7    008B    LD	0xB,A
+  02A8    0008    RET
+38:               }
+39:               
+40:               //ADC单次采样
+41:               uint16_t bk_drv_comm_get_ad_value(uint8_t adch)
+  0116    00A6    LD	0x26,A
+  014C    00F3    LD	0x73,A
+42:               {
+43:               	uint16_t result;
+44:               	ADCON1 = 0;						//左对齐
+  0117    1683    SETB	0x3,5
+  0118    019F    CLR	0x1F
+  014D    1683    SETB	0x3,5
+  014E    019F    CLR	0x1F
+45:               	ADCON0 = 0x01 | (adch << 2);	//8分频
+  0119    1283    CLRB	0x3,5
+  011A    0826    LD	A,0x26
+  011B    00A5    LD	0x25,A
+  011C    3001    LDIA	0x1
+  011D    1003    CLRB	0x3,0
+  011E    0DA5    RLCR	0x25
+  011F    3EFF    ADDIA	0xFF
+  0120    1003    CLRB	0x3,0
+  0121    1D03    SNZB	0x3,2
+  0122    291E    JP	0x11E
+  0123    0D25    RLCA	0x25
+  0124    3801    ORIA	0x1
+  0125    009F    LD	0x1F,A
+  0126    0000    NOP
+  0127    0000    NOP
+  0128    0000    NOP
+  0129    0000    NOP
+  014F    0873    LD	A,0x73
+  0150    00F2    LD	0x72,A
+  0151    3001    LDIA	0x1
+  0152    1003    CLRB	0x3,0
+  0153    0DF2    RLCR	0x72
+  0154    3EFF    ADDIA	0xFF
+  0155    1003    CLRB	0x3,0
+  0156    1D03    SNZB	0x3,2
+  0157    2953    JP	0x153
+  0158    0D72    RLCA	0x72
+  0159    3801    ORIA	0x1
+  015A    1283    CLRB	0x3,5
+  015B    009F    LD	0x1F,A
+  015C    0000    NOP
+  015D    0000    NOP
+  015E    0000    NOP
+  015F    0000    NOP
+46:               	asm("nop");
+47:               	asm("nop");
+48:               	asm("nop");
+49:               	asm("nop");
+50:               	GODONE = 1;						//开始转换
+  012A    1283    CLRB	0x3,5
+  012B    149F    SETB	0x1F,1
+  0160    1283    CLRB	0x3,5
+  0161    149F    SETB	0x1F,1
+51:               
+52:               	unsigned char i = 0;
+  012C    01A7    CLR	0x27
+  0162    01F4    CLR	0x74
+53:               	while(GODONE)
+  012D    1C9F    SNZB	0x1F,1
+  012E    2934    JP	0x134
+  0163    1C9F    SNZB	0x1F,1
+  0164    296A    JP	0x16A
+54:               	{
+55:               		if(0 == (--i))
+  012F    0BA7    SZDECR	0x27
+  0130    292D    JP	0x12D
+  0165    0BF4    SZDECR	0x74
+  0166    2963    JP	0x163
+56:               			return 0;				//转换超时
+  0131    01A3    CLR	0x23
+  0132    01A4    CLR	0x24
+  0133    0008    RET
+  0167    01F0    CLR	0x70
+  0168    01F1    CLR	0x71
+  0169    0008    RET
+57:               	}
+58:               	result=(ADRESH<<4)+(ADRESL>>4);	//计算12位AD值;
+  0134    081E    LD	A,0x1E
+  0135    00A8    LD	0x28,A
+  0136    30F0    LDIA	0xF0
+  0137    01A9    CLR	0x29
+  0138    0EA8    SWAPR	0x28
+  0139    0EA9    SWAPR	0x29
+  013A    05A9    ANDR	0x29
+  013B    0828    LD	A,0x28
+  013C    390F    ANDIA	0xF
+  013D    04A9    ORR	0x29
+  013E    30F0    LDIA	0xF0
+  013F    05A8    ANDR	0x28
+  0140    1683    SETB	0x3,5
+  0141    0E1E    SWAPA	0x1E
+  0142    390F    ANDIA	0xF
+  0143    1283    CLRB	0x3,5
+  0144    07A8    ADDR	0x28
+  0145    1803    SZB	0x3,0
+  0146    0AA9    INCR	0x29
+  016A    081E    LD	A,0x1E
+  016B    00F5    LD	0x75,A
+  016C    30F0    LDIA	0xF0
+  016D    01F6    CLR	0x76
+  016E    0EF5    SWAPR	0x75
+  016F    0EF6    SWAPR	0x76
+  0170    05F6    ANDR	0x76
+  0171    0875    LD	A,0x75
+  0172    390F    ANDIA	0xF
+  0173    04F6    ORR	0x76
+  0174    30F0    LDIA	0xF0
+  0175    05F5    ANDR	0x75
+  0176    1683    SETB	0x3,5
+  0177    0E1E    SWAPA	0x1E
+  0178    390F    ANDIA	0xF
+  0179    07F5    ADDR	0x75
+  017A    1803    SZB	0x3,0
+  017B    0AF6    INCR	0x76
+59:               	return result;
+  0147    0829    LD	A,0x29
+  0148    00A4    LD	0x24,A
+  0149    0828    LD	A,0x28
+  014A    00A3    LD	0x23,A
+  014B    0008    RET
+  017C    0876    LD	A,0x76
+  017D    00F1    LD	0x71,A
+  017E    0875    LD	A,0x75
+  017F    00F0    LD	0x70,A
+  0180    0008    RET
+60:               }
+61:               
+62:               //延时ms
+63:               void bk_drv_comm_delay_ms(uint16_t x)
+64:               {
+65:               	unsigned char i,j;
+66:               	for(i=x;i>0;i--){		
+  02A9    0823    LD	A,0x23
+  02AA    00A5    LD	0x25,A
+  02AB    0825    LD	A,0x25
+  02AC    1903    SZB	0x3,2
+  02AD    0008    RET
+67:               		for(j=153/8;j>0;j--);
+  02AE    3013    LDIA	0x13
+  02AF    00A6    LD	0x26,A
+  02B0    0BA6    SZDECR	0x26
+  02B1    2AB0    JP	0x2B0
+  02B2    0064    CLRWDT
+  02B3    1283    CLRB	0x3,5
+  02B4    03A5    DECR	0x25
+  02B5    2AAB    JP	0x2AB
+68:               		asm("clrwdt");
+69:               	}
+70:               }
+71:               
+72:               //清看门狗
+73:               void bk_drv_comm_watchdog_feed(void)
+  02ED    0064    CLRWDT
+  02EE    0008    RET
+74:               {
+75:               	asm("clrwdt");
+76:               }
+77:               
+78:               //4颗LED独立控制方案
+79:               //LED开
+80:               /*
+81:               void bk_drv_led_on(uint8_t num)
+82:               {
+83:               	uint8_t led_num[4]={BSP_PIN_LED_1,
+84:               	                    BSP_PIN_LED_2,
+85:               						BSP_PIN_LED_3,
+86:               						BSP_PIN_LED_4};
+87:               	BSP_PORT_LED |= (1<<led_num[num]);
+88:               }
+89:               
+90:               //LED关
+91:               void bk_drv_led_off(uint8_t num)
+92:               {
+93:               	uint8_t led_num[4]={BSP_PIN_LED_1,
+94:               	                    BSP_PIN_LED_2,
+95:               						BSP_PIN_LED_3,
+96:               						BSP_PIN_LED_4};
+97:               	BSP_PORT_LED &= ~(1<<led_num[num]);
+98:               }
+99:               */
+100:              
+101:              //动态刷新LED方案  0-3号4个LED
+102:              void bk_drv_dynamic_led_on(uint8_t num)
+  01D5    00F0    LD	0x70,A
+103:              {	
+104:              	switch(num){
+  01D6    29E6    JP	0x1E6
+105:              		case 0:{				
+106:              			BSP_PORT_LED &=  (1<<BSP_PIN_LED_1);	//100	
+  01D7    3001    LDIA	0x1
+  01D8    0586    ANDR	0x6
+107:              			BSP_PORT_LED |= ~(1<<BSP_PIN_LED_2);	
+  01D9    30FB    LDIA	0xFB
+  01DA    0486    ORR	0x6
+108:              			BSP_PORT_LED &= ~(1<<BSP_PIN_LED_3);
+  01DB    1086    CLRB	0x6,1
+109:              			break;
+  01DC    0008    RET
+110:              		}	
+111:              		case 1:{		
+112:              			BSP_PORT_LED |= ~(1<<BSP_PIN_LED_1);	//011
+113:              			BSP_PORT_LED &=  (1<<BSP_PIN_LED_2);	
+  01DD    21F2    CALL	0x1F2
+114:              			BSP_PORT_LED |=  (1<<BSP_PIN_LED_3);
+  01DE    1486    SETB	0x6,1
+115:              			break;
+  01DF    0008    RET
+116:              		}	
+117:              		case 2:{		
+118:              			BSP_PORT_LED |= ~(1<<BSP_PIN_LED_1);	//010
+119:              			BSP_PORT_LED &=  (1<<BSP_PIN_LED_2);			
+  01E0    21F2    CALL	0x1F2
+  01E1    29DB    JP	0x1DB
+120:              			BSP_PORT_LED &= ~(1<<BSP_PIN_LED_3);
+121:              			break;
+122:              		}	
+123:              		case 3:{
+124:              			BSP_PORT_LED &= ~(1<<BSP_PIN_LED_1);	//001
+  01E2    1006    CLRB	0x6,0
+125:              			BSP_PORT_LED |= ~(1<<BSP_PIN_LED_2);
+  01E3    30FB    LDIA	0xFB
+  01E4    0486    ORR	0x6
+  01E5    29DE    JP	0x1DE
+  01E6    0870    LD	A,0x70
+  01E7    0084    LD	0x4,A
+  01E8    3004    LDIA	0x4
+  01E9    0204    SUBA	0x4
+  01EA    1803    SZB	0x3,0
+  01EB    0008    RET
+  01EC    3002    LDIA	0x2
+  01ED    008A    LD	0xA,A
+  01EE    30E2    LDIA	0xE2
+  01EF    0704    ADDA	0x4
+  01F0    0082    LD	0x2,A
+  01F1    0008    RET
+126:              			BSP_PORT_LED |=  (1<<BSP_PIN_LED_3);	
+127:              
+128:              			break;
+129:              		}	
+130:              		default:break;
+131:              	}
+132:              	
+133:              		
+134:              }
+135:              
+136:              //LED关
+137:              void bk_drv_dynamic_led_off(void)
+138:              {
+139:              	BSP_PORT_LED &= ~(1<<BSP_PIN_LED_1);
+  02E6    1006    CLRB	0x6,0
+140:              	BSP_PORT_LED &= ~(1<<BSP_PIN_LED_2);
+  02E7    1106    CLRB	0x6,2
+141:              	BSP_PORT_LED &= ~(1<<BSP_PIN_LED_3);
+  02E8    1086    CLRB	0x6,1
+  02E9    0008    RET
+142:              }
+143:              
+144:              //充电状态检测  1-充电  0-放电
+145:              uint8_t bk_drv_charge_status_detect(void)
+146:              {
+147:              	if(BSP_PORT_CHARGE & (1<<BSP_PIN_CHARGE) ==0){
+  02EF    3400    RET	0x0
+148:              		return 1;
+149:              	}else{
+150:              		return 0;
+151:              	}
+152:              }
+---- G:\倍益康\MCU选型\中微\dms-m2-power\src\bk_app.c ----------------------------------------------------------------------
+1:                #include "bk_drv_comm.h"
+2:                #include "bk_app.h"
+3:                
+4:                struct 
+5:                {
+6:                	uint8_t disp;			//显示电量百分比
+7:                	uint8_t real_time;		//实时电量百分比
+8:                }energy;
+9:                static uint8_t led_status;	//LED显示状态，0-3位每位对应1-4个LED，1-点亮
+10:               
+11:               //内部函数
+12:               static void bk_app_get_energy(void);
+13:               static void bk_app_energy_disp_sync(void);
+14:               static void bk_app_led_status_set(void);
+15:               static void bk_app_led_sync(void);
+16:               	uint16_t bat_vol;
+17:               //初始化，采集初始电量
+18:               void bk_app_init(void)
+19:               {
+20:               	uint8_t i;
+21:               	//驱动初始化
+22:               	bk_drv_comm_init();	
+  027D    2219    CALL	0x219
+23:               	
+24:               	//延时1秒，等待AD电压稳定
+25:               	bk_drv_comm_delay_ms(1000);	
+  027E    30E8    LDIA	0xE8
+  027F    1283    CLRB	0x3,5
+  0280    00A3    LD	0x23,A
+  0281    3003    LDIA	0x3
+  0282    00A4    LD	0x24,A
+  0283    22A9    CALL	0x2A9
+26:               	for(i=0; i<5; i++){
+  0284    01B0    CLR	0x30
+27:               		bk_app_get_energy();
+  0285    20D3    CALL	0xD3
+  0286    3005    LDIA	0x5
+  0287    0AB0    INCR	0x30
+  0288    0230    SUBA	0x30
+  0289    1C03    SNZB	0x3,0
+  028A    2A85    JP	0x285
+28:               	}	
+29:               	energy.disp=energy.real_time;		//获取初始显示电量
+  028B    0838    LD	A,0x38
+  028C    00B7    LD	0x37,A
+  028D    0008    RET
+30:               }
+31:               
+32:               //工作线程，每4ms调用一次
+33:               void bk_app_work_handle(void)
+  02D0    3019    LDIA	0x19
+34:               {
+35:               	static uint8_t timer_100ms;
+36:               	timer_100ms++;
+  02D1    0ABD    INCR	0x3D
+37:               	if(timer_100ms>=25){
+  02D2    023D    SUBA	0x3D
+  02D3    1C03    SNZB	0x3,0
+  02D4    2AD9    JP	0x2D9
+38:               		timer_100ms=0;
+  02D5    01BD    CLR	0x3D
+39:               		//100ms调用
+40:               		bk_app_get_energy();
+  02D6    2083    CALL	0x83
+41:               		bk_app_energy_disp_sync();	
+  02D7    21F7    CALL	0x1F7
+42:               		bk_app_led_status_set();	
+  02D8    201E    CALL	0x1E
+43:               	}
+44:               	bk_app_led_sync();
+  02D9    2A66    JP	0x266
+45:               }
+46:               
+47:               //AD采样，计算当前实时电量百分比
+48:               static void bk_app_get_energy(void)
+49:               {
+50:               	static uint8_t ad_count;
+51:               	static uint16_t ad_sum;
+52:               
+53:               	
+54:               	//5次平均
+55:               	ad_sum += bk_drv_comm_get_ad_value(AD_CH_AIN_VOL);
+  0083    3001    LDIA	0x1
+  0084    214C    CALL	0x14C
+  0085    0870    LD	A,0x70
+  0086    1283    CLRB	0x3,5
+  0087    07B3    ADDR	0x33
+  0088    1803    SZB	0x3,0
+  0089    0AB4    INCR	0x34
+  008A    0871    LD	A,0x71
+  00D3    3001    LDIA	0x1
+  00D4    2116    CALL	0x116
+  00D5    0823    LD	A,0x23
+  00D6    07B3    ADDR	0x33
+  00D7    1803    SZB	0x3,0
+  00D8    0AB4    INCR	0x34
+  00D9    0824    LD	A,0x24
+56:               	ad_count++;
+57:               	if(ad_count>=5){
+  008B    20CE    CALL	0xCE
+  008C    1C03    SNZB	0x3,0
+  008D    0008    RET
+  00DA    20CE    CALL	0xCE
+  00DB    1C03    SNZB	0x3,0
+  00DC    0008    RET
+58:               		bat_vol = ad_sum/ad_count;
+  008E    083C    LD	A,0x3C
+  008F    00F6    LD	0x76,A
+  0090    01F7    CLR	0x77
+  0091    0834    LD	A,0x34
+  0092    00F9    LD	0x79,A
+  0093    0833    LD	A,0x33
+  0094    00F8    LD	0x78,A
+  0095    21AB    CALL	0x1AB
+  0096    0877    LD	A,0x77
+  0097    00B6    LD	0x36,A
+  0098    0876    LD	A,0x76
+  00DD    083C    LD	A,0x3C
+  00DE    00A9    LD	0x29,A
+  00DF    01AA    CLR	0x2A
+  00E0    0834    LD	A,0x34
+  00E1    00AC    LD	0x2C,A
+  00E2    0833    LD	A,0x33
+  00E3    00AB    LD	0x2B,A
+  00E4    2181    CALL	0x181
+  00E5    082A    LD	A,0x2A
+  00E6    00B6    LD	0x36,A
+  00E7    0829    LD	A,0x29
+59:               		ad_count=0;
+60:               		ad_sum=0;
+61:               		//将电压转换为电量百分比
+62:               		//此数值根据实际电压和分压比校正
+63:               		if(bat_vol<BAT_VOL_LOW_AD){
+  0099    20C7    CALL	0xC7
+  009A    1903    SZB	0x3,2
+  009B    0235    SUBA	0x35
+  009C    1803    SZB	0x3,0
+  009D    28A0    JP	0xA0
+  00E8    20C7    CALL	0xC7
+  00E9    1903    SZB	0x3,2
+  00EA    0235    SUBA	0x35
+  00EB    1803    SZB	0x3,0
+  00EC    28EF    JP	0xEF
+64:               			bat_vol=0;
+  009E    01B5    CLR	0x35
+  009F    28A9    JP	0xA9
+  00ED    01B5    CLR	0x35
+  00EE    28F8    JP	0xF8
+65:               		}else if(bat_vol>= BAT_VOL_HIGH_AD){
+  00A0    300D    LDIA	0xD
+  00A1    0236    SUBA	0x36
+  00A2    3070    LDIA	0x70
+  00A3    1903    SZB	0x3,2
+  00A4    0235    SUBA	0x35
+  00A5    1C03    SNZB	0x3,0
+  00A6    28AB    JP	0xAB
+  00EF    300D    LDIA	0xD
+  00F0    0236    SUBA	0x36
+  00F1    3070    LDIA	0x70
+  00F2    1903    SZB	0x3,2
+  00F3    0235    SUBA	0x35
+  00F4    1C03    SNZB	0x3,0
+  00F5    28FA    JP	0xFA
+66:               			bat_vol=100;
+  00A7    3064    LDIA	0x64
+  00A8    00B5    LD	0x35,A
+  00A9    01B6    CLR	0x36
+  00F6    3064    LDIA	0x64
+  00F7    00B5    LD	0x35,A
+  00F8    01B6    CLR	0x36
+67:               		}else{
+  00AA    28C4    JP	0xC4
+  00F9    2913    JP	0x113
+68:               			bat_vol =(bat_vol -BAT_VOL_LOW_AD) *100 /(BAT_VOL_HIGH_AD - BAT_VOL_LOW_AD);
+  00AB    30D7    LDIA	0xD7
+  00AC    00F6    LD	0x76,A
+  00AD    3003    LDIA	0x3
+  00AE    00F7    LD	0x77,A
+  00AF    0835    LD	A,0x35
+  00B0    3E67    ADDIA	0x67
+  00B1    00F0    LD	0x70,A
+  00B2    0836    LD	A,0x36
+  00B3    1803    SZB	0x3,0
+  00B4    3E01    ADDIA	0x1
+  00B5    3EF6    ADDIA	0xF6
+  00B6    00F1    LD	0x71,A
+  00B7    3064    LDIA	0x64
+  00B8    00F2    LD	0x72,A
+  00B9    01F3    CLR	0x73
+  00BA    224D    CALL	0x24D
+  00BB    0871    LD	A,0x71
+  00BC    00F9    LD	0x79,A
+  00BD    0870    LD	A,0x70
+  00BE    00F8    LD	0x78,A
+  00BF    21AB    CALL	0x1AB
+  00C0    0877    LD	A,0x77
+  00C1    00B6    LD	0x36,A
+  00C2    0876    LD	A,0x76
+  00C3    00B5    LD	0x35,A
+  00FA    30D7    LDIA	0xD7
+  00FB    00A9    LD	0x29,A
+  00FC    3003    LDIA	0x3
+  00FD    00AA    LD	0x2A,A
+  00FE    0835    LD	A,0x35
+  00FF    3E67    ADDIA	0x67
+  0100    00A3    LD	0x23,A
+  0101    0836    LD	A,0x36
+  0102    1803    SZB	0x3,0
+  0103    3E01    ADDIA	0x1
+  0104    3EF6    ADDIA	0xF6
+  0105    00A4    LD	0x24,A
+  0106    3064    LDIA	0x64
+  0107    00A5    LD	0x25,A
+  0108    01A6    CLR	0x26
+  0109    2234    CALL	0x234
+  010A    0824    LD	A,0x24
+  010B    00AC    LD	0x2C,A
+  010C    0823    LD	A,0x23
+  010D    00AB    LD	0x2B,A
+  010E    2181    CALL	0x181
+  010F    082A    LD	A,0x2A
+  0110    00B6    LD	0x36,A
+  0111    0829    LD	A,0x29
+  0112    00B5    LD	0x35,A
+69:               		}
+70:               		energy.real_time=bat_vol;
+  00C4    0835    LD	A,0x35
+  00C5    00B8    LD	0x38,A
+  00C6    0008    RET
+  0113    0835    LD	A,0x35
+  0114    00B8    LD	0x38,A
+  0115    0008    RET
+71:               	}
+72:               }
+73:               
+74:               //显示电量刷新
+75:               static void bk_app_energy_disp_sync(void)
+76:               {
+77:               	static uint16_t disp_timer=0;
+78:               	disp_timer++;
+  01F7    0AB1    INCR	0x31
+  01F8    1903    SZB	0x3,2
+  01F9    0AB2    INCR	0x32
+79:               	if(bk_drv_charge_status_detect()==1){						
+  01FA    22EF    CALL	0x2EF
+  01FB    3A01    XORIA	0x1
+80:               		//充电状态		
+81:               		if(disp_timer>=CHARGE_UPDATE_TIME){
+  01FC    3000    LDIA	0x0
+  01FD    1D03    SNZB	0x3,2
+  01FE    2A0C    JP	0x20C
+  01FF    0232    SUBA	0x32
+  0200    3028    LDIA	0x28
+  0201    1903    SZB	0x3,2
+  0202    0231    SUBA	0x31
+  0203    1C03    SNZB	0x3,0
+  0204    0008    RET
+82:               			disp_timer=0;				
+  0205    01B1    CLR	0x31
+  0206    01B2    CLR	0x32
+83:               			if(energy.disp<energy.real_time){			
+  0207    0838    LD	A,0x38
+  0208    0237    SUBA	0x37
+  0209    1C03    SNZB	0x3,0
+84:               				energy.disp++;							
+  020A    0AB7    INCR	0x37
+  020B    0008    RET
+85:               			}
+86:               		}	
+87:               	}else{
+88:               		//放电状态
+89:               		if(disp_timer>=DISCHARGE_UPDATE_TIME){
+  020C    0232    SUBA	0x32
+  020D    301E    LDIA	0x1E
+  020E    1903    SZB	0x3,2
+  020F    0231    SUBA	0x31
+  0210    1C03    SNZB	0x3,0
+  0211    0008    RET
+90:               			disp_timer=0;
+  0212    01B1    CLR	0x31
+  0213    01B2    CLR	0x32
+91:               			if(energy.disp>energy.real_time){
+  0214    0837    LD	A,0x37
+  0215    0238    SUBA	0x38
+  0216    1C03    SNZB	0x3,0
+92:               				energy.disp--;
+  0217    03B7    DECR	0x37
+  0218    0008    RET
+93:               			}
+94:               		}
+95:               	}		
+96:               } 	
+97:               
+98:               //对应LED状态设置为点亮
+99:               static void bk_app_led_status_on(uint8_t led_num)
+  02C3    00F1    LD	0x71,A
+100:              {
+101:              	led_status |= 1<<led_num;
+  02C4    3001    LDIA	0x1
+  02C5    00F0    LD	0x70,A
+  02C6    0A71    INCA	0x71
+  02C7    2ACA    JP	0x2CA
+  02C8    1003    CLRB	0x3,0
+  02C9    0DF0    RLCR	0x70
+  02CA    3EFF    ADDIA	0xFF
+  02CB    1D03    SNZB	0x3,2
+  02CC    2AC8    JP	0x2C8
+  02CD    0870    LD	A,0x70
+  02CE    04BE    ORR	0x3E
+  02CF    0008    RET
+102:              }
+103:              
+104:              //对应LED状态设置为熄灭
+105:              static void bk_app_led_status_off(uint8_t led_num)
+  028E    00F1    LD	0x71,A
+106:              {
+107:              	led_status &= ~(1<<led_num);
+  028F    3001    LDIA	0x1
+  0290    00F0    LD	0x70,A
+  0291    0A71    INCA	0x71
+  0292    2A95    JP	0x295
+  0293    1003    CLRB	0x3,0
+  0294    0DF0    RLCR	0x70
+  0295    3EFF    ADDIA	0xFF
+  0296    1D03    SNZB	0x3,2
+  0297    2A93    JP	0x293
+  0298    0870    LD	A,0x70
+  0299    3AFF    XORIA	0xFF
+  029A    05BE    ANDR	0x3E
+  029B    0008    RET
+108:              }
+109:              
+110:              //根据显示电量指示转为LED点亮状态
+111:              static void bk_app_led_status_set(void)
+112:              {	
+113:              	static uint8_t disp_timer=0;
+114:              	static uint8_t flag,count,led_disp;
+115:              	uint8_t i;	
+116:              	uint8_t dangwei[4]={25,50,75,100};
+  001E    0842    LD	A,0x42
+  001F    00F5    LD	0x75,A
+  0020    0841    LD	A,0x41
+  0021    00F4    LD	0x74,A
+  0022    0840    LD	A,0x40
+  0023    00F3    LD	0x73,A
+  0024    083F    LD	A,0x3F
+  0025    00F2    LD	0x72,A
+117:              	
+118:              	disp_timer++;
+  0026    0ABB    INCR	0x3B
+119:              	if(bk_drv_charge_status_detect()==1){						
+  0027    22EF    CALL	0x2EF
+  0028    3A01    XORIA	0x1
+  0029    1D03    SNZB	0x3,2
+  002A    2856    JP	0x56
+120:              		//充电状态			
+121:              		if(disp_timer>=5){		//500ms闪一次
+  002B    3005    LDIA	0x5
+  002C    023B    SUBA	0x3B
+  002D    1C03    SNZB	0x3,0
+  002E    0008    RET
+122:              			disp_timer=0;
+  002F    01BB    CLR	0x3B
+123:              			//点亮常亮LED			
+124:              			for(i=0; i<4; i++){
+  0030    01F6    CLR	0x76
+125:              				if(energy.disp>=dangwei[i]){			
+  0031    0876    LD	A,0x76
+  0032    3E72    ADDIA	0x72
+126:              					bk_app_led_status_on(i);
+  0033    207E    CALL	0x7E
+  0034    1C03    SNZB	0x3,0
+  0035    2838    JP	0x38
+  0036    22C3    CALL	0x2C3
+127:              				}else{
+  0037    283A    JP	0x3A
+128:              					bk_app_led_status_off(i);					
+  0038    228E    CALL	0x28E
+129:              					break;
+  0039    283F    JP	0x3F
+  003A    3004    LDIA	0x4
+  003B    0AF6    INCR	0x76
+  003C    0276    SUBA	0x76
+  003D    1C03    SNZB	0x3,0
+  003E    2831    JP	0x31
+130:              				}
+131:              			}
+132:              			
+133:              			if(count==0){
+  003F    087D    LD	A,0x7D
+  0040    1D03    SNZB	0x3,2
+  0041    2844    JP	0x44
+134:              				count=i;
+  0042    0876    LD	A,0x76
+  0043    00FD    LD	0x7D,A
+135:              			}
+136:              			//闪烁LED		
+137:              			if(flag==0){
+  0044    083A    LD	A,0x3A
+  0045    1D03    SNZB	0x3,2
+  0046    284B    JP	0x4B
+138:              				flag=1;
+  0047    01BA    CLR	0x3A
+  0048    0ABA    INCR	0x3A
+139:              				bk_app_led_status_on(count);
+  0049    087D    LD	A,0x7D
+  004A    2AC3    JP	0x2C3
+140:              			}else{
+141:              				flag=0;
+  004B    01BA    CLR	0x3A
+142:              				bk_app_led_status_off(count);
+  004C    087D    LD	A,0x7D
+  004D    228E    CALL	0x28E
+143:              				if(count<4){
+  004E    3004    LDIA	0x4
+  004F    027D    SUBA	0x7D
+  0050    1803    SZB	0x3,0
+  0051    2854    JP	0x54
+144:              					count++;
+  0052    0AFD    INCR	0x7D
+145:              				}else{
+  0053    0008    RET
+146:              					count=0;
+  0054    01FD    CLR	0x7D
+  0055    0008    RET
+147:              				}
+148:              			}
+149:              		}			
+150:              	}
+151:              	else{
+152:              		//放电状态	
+153:              		if(energy.disp<dangwei[0]){			
+  0056    0872    LD	A,0x72
+  0057    0237    SUBA	0x37
+  0058    1803    SZB	0x3,0
+  0059    286F    JP	0x6F
+154:              			//小于最低档，LED1 2Hz快闪
+155:              			if(disp_timer>=2){	
+  005A    3002    LDIA	0x2
+  005B    023B    SUBA	0x3B
+  005C    1C03    SNZB	0x3,0
+  005D    0008    RET
+156:              				disp_timer=0;
+  005E    01BB    CLR	0x3B
+157:              				
+158:              				if(flag==0){
+  005F    083A    LD	A,0x3A
+  0060    3001    LDIA	0x1
+  0061    1D03    SNZB	0x3,2
+  0062    2867    JP	0x67
+159:              					flag=1;
+  0063    01BA    CLR	0x3A
+  0064    0ABA    INCR	0x3A
+160:              					bk_app_led_status_on(1);
+  0065    22C3    CALL	0x2C3
+161:              				}else{
+  0066    2869    JP	0x69
+162:              					flag=0;
+  0067    01BA    CLR	0x3A
+163:              					bk_app_led_status_off(1);
+  0068    228E    CALL	0x28E
+164:              				}
+165:              				bk_app_led_status_off(2);
+  0069    3002    LDIA	0x2
+  006A    228E    CALL	0x28E
+166:              				bk_app_led_status_off(3);
+  006B    3003    LDIA	0x3
+  006C    228E    CALL	0x28E
+167:              				bk_app_led_status_off(4);
+  006D    3004    LDIA	0x4
+  006E    2A8E    JP	0x28E
+168:              			}			
+169:              		}else{
+170:              			for(i=0; i<4; i++){
+  006F    01F6    CLR	0x76
+171:              				if(energy.disp>=dangwei[i]){			
+  0070    0876    LD	A,0x76
+  0071    3E72    ADDIA	0x72
+172:              					bk_app_led_status_on(i);
+  0072    207E    CALL	0x7E
+  0073    1C03    SNZB	0x3,0
+  0074    2877    JP	0x77
+  0075    22C3    CALL	0x2C3
+173:              				}
+  0076    2878    JP	0x78
+174:              				else{
+175:              					bk_app_led_status_off(i);					
+  0077    228E    CALL	0x28E
+  0078    3004    LDIA	0x4
+  0079    0AF6    INCR	0x76
+  007A    0276    SUBA	0x76
+  007B    1803    SZB	0x3,0
+  007C    0008    RET
+  007D    2870    JP	0x70
+176:              				}
+177:              			}	
+178:              		}	
+179:              	}			
+180:              } 	
+181:              
+182:              //根据LED状态动态刷新LED
+183:              static void bk_app_led_sync(void)
+184:              {	
+185:              	static uint8_t led_sel;	
+186:              	if((led_status & (1<<led_sel))!=0){
+  0266    3001    LDIA	0x1
+  0267    00F1    LD	0x71,A
+  0268    0A39    INCA	0x39
+  0269    2A6C    JP	0x26C
+  026A    1003    CLRB	0x3,0
+  026B    0DF1    RLCR	0x71
+  026C    3EFF    ADDIA	0xFF
+  026D    1D03    SNZB	0x3,2
+  026E    2A6A    JP	0x26A
+  026F    0871    LD	A,0x71
+  0270    053E    ANDA	0x3E
+  0271    1903    SZB	0x3,2
+  0272    2A76    JP	0x276
+187:              		bk_drv_dynamic_led_on(led_sel);
+  0273    0839    LD	A,0x39
+  0274    21D5    CALL	0x1D5
+188:              	}else{
+  0275    2A77    JP	0x277
+189:              		bk_drv_dynamic_led_off();
+  0276    22E6    CALL	0x2E6
+  0277    3004    LDIA	0x4
+190:              	}		
+191:              	led_sel++;
+  0278    0AB9    INCR	0x39
+192:              	if(led_sel>3){
+  0279    0239    SUBA	0x39
+  027A    1803    SZB	0x3,0
+193:              		led_sel=0;
+  027B    01B9    CLR	0x39
+  027C    0008    RET
+194:              	}
+195:              } 	
+196:              
+---- G:\倍益康\MCU选型\中微\SCMCU_IDE_V2.00.07\SCMCU_IDE_V2.00.07\data\sources\common\Umul16.c ----------------------------------------------------------------------
+1:                // 16 x 16 bit multiplication with 16 bit result
+2:                #ifdef _PIC18
+3:                #define _Has_hardware_multiply 1
+4:                #else
+5:                #define _Has_hardware_multiply 0
+6:                #endif
+7:                
+8:                #if defined(_PIC14E) || defined(_PIC14EX) || defined(_PIC18)
+9:                #define _Has_large_call_stack 1
+10:               #else
+11:               #define _Has_large_call_stack 0
+12:               #endif
+13:               
+14:               unsigned int
+15:               __wmul(unsigned int multiplier, unsigned int multiplicand)
+  0234    01A7    CLR	0x27
+  0235    01A8    CLR	0x28
+  0236    1C23    SNZB	0x23,0
+  0237    2A3E    JP	0x23E
+  0238    0825    LD	A,0x25
+  0239    07A7    ADDR	0x27
+  023A    1803    SZB	0x3,0
+  023B    0AA8    INCR	0x28
+  023C    0826    LD	A,0x26
+  023D    07A8    ADDR	0x28
+  023E    1003    CLRB	0x3,0
+  023F    0DA5    RLCR	0x25
+  0240    0DA6    RLCR	0x26
+  0241    1003    CLRB	0x3,0
+  0242    0CA4    RRCR	0x24
+  0243    0CA3    RRCR	0x23
+  0244    0823    LD	A,0x23
+  0245    0424    ORA	0x24
+  0246    1D03    SNZB	0x3,2
+  0247    2A36    JP	0x236
+  0248    0828    LD	A,0x28
+  0249    00A4    LD	0x24,A
+  024A    0827    LD	A,0x27
+  024B    00A3    LD	0x23,A
+  024C    0008    RET
+  024D    01F4    CLR	0x74
+  024E    01F5    CLR	0x75
+  024F    1C70    SNZB	0x70,0
+  0250    2A57    JP	0x257
+  0251    0872    LD	A,0x72
+  0252    07F4    ADDR	0x74
+  0253    1803    SZB	0x3,0
+  0254    0AF5    INCR	0x75
+  0255    0873    LD	A,0x73
+  0256    07F5    ADDR	0x75
+  0257    1003    CLRB	0x3,0
+  0258    0DF2    RLCR	0x72
+  0259    0DF3    RLCR	0x73
+  025A    1003    CLRB	0x3,0
+  025B    0CF1    RRCR	0x71
+  025C    0CF0    RRCR	0x70
+  025D    0870    LD	A,0x70
+  025E    0471    ORA	0x71
+  025F    1D03    SNZB	0x3,2
+  0260    2A4F    JP	0x24F
+  0261    0875    LD	A,0x75
+  0262    00F1    LD	0x71,A
+  0263    0874    LD	A,0x74
+  0264    00F0    LD	0x70,A
+  0265    0008    RET
+16:               {
+17:                       unsigned int product;
+18:               
+19:               #if _Has_hardware_multiply || _Has_large_call_stack
+20:               
+21:               #define LOWBYTE(x)  (*(unsigned char *)(&x))
+22:               #define HIGHBYTE(x) (*(((unsigned char *)(&x))+1))
+23:               
+24:               	// optimized to allow use of the 8 x 8 bit hardware multiply instruction
+25:               /*
+26:               a 16-bit multiply can be decomposed into the sum of three 8-bit multiplies
+27:                      a  b
+28:               *      c  d
+29:               -----------
+30:                    |   bd
+31:                    |ad  0
+32:                    |bc  0
+33:               +  ac| 0  0 (we ignore this intermediate product
+34:                            because it does not affect the low 16 bits of the result)
+35:               ===========
+36:                */
+37:                       product =  LOWBYTE(multiplier) * LOWBYTE(multiplicand);
+38:                       product += (LOWBYTE(multiplier) * HIGHBYTE(multiplicand)) << 8;
+39:                       product += (HIGHBYTE(multiplier) * LOWBYTE(multiplicand)) << 8;
+40:               
+41:               #else
+42:               
+43:               	product = 0;
+44:               	do {
+45:               		if(multiplier & 1)
+46:               			product += multiplicand;
+47:               		multiplicand <<= 1;
+48:               		multiplier >>= 1;
+49:               	} while(multiplier != 0);
+50:               
+51:               #endif
+52:                       return product;
+53:               }
+---- G:\倍益康\MCU选型\中微\SCMCU_IDE_V2.00.07\SCMCU_IDE_V2.00.07\data\sources\common\lwdiv.c ----------------------------------------------------------------------
+1:                // word unsigned division
+2:                
+3:                unsigned int
+4:                #ifdef __PICC__
+5:                #warning TODO: update cgpic and this file to use the other prototype
+6:                __lwdiv(unsigned int divisor, unsigned int dividend)
+  0181    01AD    CLR	0x2D
+  0182    01AE    CLR	0x2E
+  0183    0829    LD	A,0x29
+  0184    042A    ORA	0x2A
+  0185    1903    SZB	0x3,2
+  0186    29A6    JP	0x1A6
+  0187    01AF    CLR	0x2F
+  0188    0AAF    INCR	0x2F
+  0189    1BAA    SZB	0x2A,7
+  018A    298F    JP	0x18F
+  018B    1003    CLRB	0x3,0
+  018C    0DA9    RLCR	0x29
+  018D    0DAA    RLCR	0x2A
+  018E    2988    JP	0x188
+  018F    1003    CLRB	0x3,0
+  0190    0DAD    RLCR	0x2D
+  0191    0DAE    RLCR	0x2E
+  0192    082A    LD	A,0x2A
+  0193    022C    SUBA	0x2C
+  0194    1D03    SNZB	0x3,2
+  0195    2998    JP	0x198
+  0196    0829    LD	A,0x29
+  0197    022B    SUBA	0x2B
+  0198    1C03    SNZB	0x3,0
+  0199    29A2    JP	0x1A2
+  019A    0829    LD	A,0x29
+  019B    02AB    SUBR	0x2B
+  019C    082A    LD	A,0x2A
+  019D    1C03    SNZB	0x3,0
+  019E    03AC    DECR	0x2C
+  019F    02AC    SUBR	0x2C
+  01A0    142D    SETB	0x2D,0
+  01A1    1003    CLRB	0x3,0
+  01A2    0CAA    RRCR	0x2A
+  01A3    0CA9    RRCR	0x29
+  01A4    0BAF    SZDECR	0x2F
+  01A5    298F    JP	0x18F
+  01A6    082E    LD	A,0x2E
+  01A7    00AA    LD	0x2A,A
+  01A8    082D    LD	A,0x2D
+  01A9    00A9    LD	0x29,A
+  01AA    0008    RET
+  01AB    01FA    CLR	0x7A
+  01AC    01FB    CLR	0x7B
+  01AD    0876    LD	A,0x76
+  01AE    0477    ORA	0x77
+  01AF    1903    SZB	0x3,2
+  01B0    29D0    JP	0x1D0
+  01B1    01FC    CLR	0x7C
+  01B2    0AFC    INCR	0x7C
+  01B3    1BF7    SZB	0x77,7
+  01B4    29B9    JP	0x1B9
+  01B5    1003    CLRB	0x3,0
+  01B6    0DF6    RLCR	0x76
+  01B7    0DF7    RLCR	0x77
+  01B8    29B2    JP	0x1B2
+  01B9    1003    CLRB	0x3,0
+  01BA    0DFA    RLCR	0x7A
+  01BB    0DFB    RLCR	0x7B
+  01BC    0877    LD	A,0x77
+  01BD    0279    SUBA	0x79
+  01BE    1D03    SNZB	0x3,2
+  01BF    29C2    JP	0x1C2
+  01C0    0876    LD	A,0x76
+  01C1    0278    SUBA	0x78
+  01C2    1C03    SNZB	0x3,0
+  01C3    29CC    JP	0x1CC
+  01C4    0876    LD	A,0x76
+  01C5    02F8    SUBR	0x78
+  01C6    0877    LD	A,0x77
+  01C7    1C03    SNZB	0x3,0
+  01C8    03F9    DECR	0x79
+  01C9    02F9    SUBR	0x79
+  01CA    147A    SETB	0x7A,0
+  01CB    1003    CLRB	0x3,0
+  01CC    0CF7    RRCR	0x77
+  01CD    0CF6    RRCR	0x76
+  01CE    0BFC    SZDECR	0x7C
+  01CF    29B9    JP	0x1B9
+  01D0    087B    LD	A,0x7B
+  01D1    00F7    LD	0x77,A
+  01D2    087A    LD	A,0x7A
+  01D3    00F6    LD	0x76,A
+  01D4    0008    RET
+7:                #else
+8:                __lwdiv(unsigned int dividend, unsigned int divisor)
+9:                #endif
+10:               {
+11:               	unsigned int	quotient;
+12:               	unsigned char	counter;
+13:               
+14:               	quotient = 0;
+15:               	if(divisor != 0) {
+16:               		counter = 1;
+17:               		while((divisor & 0x8000) == 0) {
+18:               			divisor <<= 1;
+19:               			counter++;
+20:               		}
+21:               		do {
+22:               			quotient <<= 1;
+23:               			if(divisor <= dividend) {
+24:               				dividend -= divisor;
+25:               				quotient |= 1;
+26:               			}
+27:               			divisor >>= 1;
+28:               		} while(--counter != 0);
+29:               	}
+30:               	return quotient;
+31:               }
+---- G:\倍益康\MCU选型\中微\dms-m2-power\src\bk_drv_isr.c ----------------------------------------------------------------------
+1:                #include "bk_drv_comm.h"
+2:                #include "bk_app.h"
+3:                
+4:                //中断服务程序
+5:                void interrupt all_isr(void)
+6:                {	
+7:                	if(TMR2IF)
+  02B6    1C8C    SNZB	0xC,1
+  02B7    2ABA    JP	0x2BA
+8:                	{
+9:                		TMR2IF = 0;	
+  02B8    108C    CLRB	0xC,1
+10:               		
+11:               		bk_app_work_handle();	
+  02B9    22D0    CALL	0x2D0
+  02BA    0822    LD	A,0x22
+  02BB    008A    LD	0xA,A
+  02BC    0821    LD	A,0x21
+  02BD    0084    LD	0x4,A
+  02BE    0E20    SWAPA	0x20
+  02BF    0083    LD	0x3,A
+  02C0    0EFE    SWAPR	0x7E
+  02C1    0E7E    SWAPA	0x7E
+  02C2    0009    RETI
+12:               	}
+13:               }
+---- stringtab ------------------------------------------------------------------
+---- reset_enter ------------------------------------------------------------------
+  0000    280D    JP	0xD
+  000D    280E    JP	0xE
+---- start_initialization ------------------------------------------------------------------
+  000E    3019    LDIA	0x19
+  000F    00BF    LD	0x3F,A
+  0010    3032    LDIA	0x32
+  0011    00C0    LD	0x40,A
+  0012    304B    LDIA	0x4B
+  0013    00C1    LD	0x41,A
+  0014    3064    LDIA	0x64
+  0015    00C2    LD	0x42,A
+  0016    3031    LDIA	0x31
+  0017    1383    CLRB	0x3,7
+  0018    0084    LD	0x4,A
+  0019    303F    LDIA	0x3F
+  001A    22DA    CALL	0x2DA
+  001B    01FD    CLR	0x7D
+---- interrupt_function_enter ----------------------------------------------------------
+  0004    00FE    LD	0x7E,A
+  0005    0E03    SWAPA	0x3
+  0006    1283    CLRB	0x3,5
+  0007    00A0    LD	0x20,A
+  0008    0804    LD	A,0x4
+  0009    00A1    LD	0x21,A
+  000A    080A    LD	A,0xA
+  000B    00A2    LD	0x22,A
+  000C    2AB6    JP	0x2B6
+---- common_function ------------------------------------------------------------------
+  001C    0183    CLR	0x3
+  001D    2AEA    JP	0x2EA
+  007E    0084    LD	0x4,A
+  007F    0800    LD	A,0x0
+  0080    0237    SUBA	0x37
+  0081    0876    LD	A,0x76
+  0082    0008    RET
+  00C7    00B5    LD	0x35,A
+  00C8    3009    LDIA	0x9
+  00C9    01BC    CLR	0x3C
+  00CA    01B3    CLR	0x33
+  00CB    01B4    CLR	0x34
+  00CC    0236    SUBA	0x36
+  00CD    3499    RET	0x99
+  00CE    07B4    ADDR	0x34
+  00CF    3005    LDIA	0x5
+  00D0    0ABC    INCR	0x3C
+  00D1    023C    SUBA	0x3C
+  00D2    0008    RET
+  01F2    30FE    LDIA	0xFE
+  01F3    0486    ORR	0x6
+  01F4    3004    LDIA	0x4
+  01F5    0586    ANDR	0x6
+  01F6    0008    RET
+  02DA    0064    CLRWDT
+  02DB    0180    CLR	0x0
+  02DC    0A84    INCR	0x4
+  02DD    0604    XORA	0x4
+  02DE    1903    SZB	0x3,2
+  02DF    3400    RET	0x0
+  02E0    0604    XORA	0x4
+  02E1    2ADB    JP	0x2DB
+  02E2    29D7    JP	0x1D7
+  02E3    29DD    JP	0x1DD
+  02E4    29E0    JP	0x1E0
+  02E5    29E2    JP	0x1E2
